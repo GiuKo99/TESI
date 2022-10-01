@@ -10,13 +10,14 @@ import threading
 import time
 import socket,os,struct
 
+
 #save image and visualize
 import numpy as np
 import cv2 
 import binascii
 import io 
-#from PIL import Image
-#import imageio.v2 as iio
+from PIL import Image
+
 
 # import some common detectron2 utilities
 from detectron2 import model_zoo
@@ -24,6 +25,9 @@ from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog, DatasetCatalog
+#from detectron2.utils.analysis import parameter_count, parameter_count_table
+#from detectron2.modeling.meta_arch.build import build_model
+
 
 VERBOSE=False
 RECEIVE_TIMESTAMP=False #only used for the dataset framework collector
@@ -33,11 +37,16 @@ deck_port = None
 
 cfg = get_cfg()
 # add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
-cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
-# Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
-cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")
+# find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
+cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
 predictor = DefaultPredictor(cfg)
+
+# view model characteristics
+#model = build_model(cfg) 
+#tab = parameter_count_table(model, 2) 
+#print(tab)
 
 def save_image(imgdata, number_of_images):
     decoded = cv2.imdecode(np.frombuffer(imgdata, np.uint8), -1)
@@ -74,6 +83,7 @@ class ImgThread(threading.Thread):
 
             # Concatenate image data, once finished send it to the UI
             if start_idx >= 0:
+                number_of_images+=1
                 #append end of packet
                 imgdata += strng[:start_idx]
                 #put in another variable the complete image
@@ -98,47 +108,31 @@ class ImgThread(threading.Thread):
 
                 if SAVE_IMAGES==True and (number_of_images % 5 ==0 ): #saves just one every 5 images to not overload
                     save_image(imgdata_complete, number_of_images)
-                    number_of_images+=1
-
+                    
                 
-                #img = io.BytesIO(imgdata_complete)
-                #im = iio.imread(img)
-                #im = Image.open(io.BytesIO(imgdata_complete))
+                if (number_of_images % 30 ==0 ): # uses one image out of 30
 
-                #decoded = cv2.imdecode(np.frombuffer(imgdata_complete, np.uint8), -1)
-                #image_name = str(number_of_images)+".jpg"
-                #try: cv2.imwrite(join("/home/bitcraze/work/im_streaming",image_name), decoded)
-                #except: print('couldnt decode image, data lenght was', len(imgdata_complete))
+                    im = cv2.imdecode(np.frombuffer(imgdata_complete, np.uint8), -1) 
+                    if type(im) == type(None):
+                        print("decoding not success")
+                        continue
 
-                #im = cv2.imread("/home/bitcraze/work/im_streaming/" + str(number_of_images)+".jpg")
+                    im = cv2.cvtColor(im,cv2.COLOR_BGR2RGB)
 
-                
-                im = cv2.imdecode(np.frombuffer(imgdata_complete, np.uint8), -1) 
-                if type(im) == type(None):
-                    print("decoding not success")
-                    continue
+                    outputs = predictor(im)
+                    v = Visualizer(im[:, :, ::-1], MetadataCatalog.get(cfg.DATASETS.TRAIN[0]), scale=1.2)
+                    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
 
-                im = cv2.cvtColor(im,cv2.COLOR_BGR2RGB)
+                    im_out = out.get_image()[:, :, ::-1]
+                    result = cv2.imwrite("debug_out.jpg",im_out) # saves the image with the prediction
+                    with open("debug_out.jpg", 'rb') as f:
+                        byte_im = f.read() # image with the prediction in the byte array format
 
-                result = cv2.imwrite("debug_in.jpg",im)
-
-                outputs = predictor(im)
-                v = Visualizer(im[:, :, ::-1], MetadataCatalog.get(cfg.DATASETS.TRAIN[0]), scale=1.2)
-                out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-
-                im_out = out.get_image()[:, :, ::-1]
-                result = cv2.imwrite("debug_out.jpg",im_out)
-                imagef = im_out.tobytes()
-
-                #cv2.imshow("output",im_out)
-                #cv2.waitKey(0)
-                
-
-                try: #show frame
-                    self._callback(imgdata_complete)
-                except gi.repository.GLib.Error:
-                    print ("image not shown")
-                    pass
+                    try: #show frame
+                        self._callback(byte_im)
+                    except gi.repository.GLib.Error:
+                        print ("image not shown")
+                        pass
 
             else: # Continue receiving the image
                 if imgdata==None:
@@ -146,7 +140,7 @@ class ImgThread(threading.Thread):
                 else:
                     imgdata += strng
 
-
+       
           
 # UI for showing frames from AI-deck example
 class FrameViewer(Gtk.Window):
@@ -180,14 +174,6 @@ class FrameViewer(Gtk.Window):
             GLib.idle_add(self.set_title, "{:.1f} fps / {:.1f} kb".format(fps, len(imgdata)/1000))
         self._start = time.time()
         img_loader = GdkPixbuf.PixbufLoader()
-
-        #result = cv2.imwrite("debug.png",imgdata)
-        #pix = Gtk.gdk.pixbuf_new_from_file("/home/bitcraze/work/debug.png")
-        #GLib.idle_add(self._update_image, pix)
-
-        img_loader.write(imgdata)
-        pix = img_loader.get_pixbuf()
-        GLib.idle_add(self._update_image, pix)
 
         # Try to decode JPEG from the data sent from the stream
         try:
