@@ -10,12 +10,14 @@ import threading
 import time
 import socket,os,struct
 
+
 #save image and visualize
 import numpy as np
 import cv2 
 import binascii 
 import io 
 from PIL import Image
+
 
 # import some common detectron2 utilities
 from detectron2 import model_zoo
@@ -28,6 +30,7 @@ from detectron2.data import MetadataCatalog, DatasetCatalog
 
 VERBOSE=False
 RECEIVE_TIMESTAMP=False #only used for the dataset framework collector
+
 
 deck_ip = None
 deck_port = None
@@ -189,7 +192,6 @@ parser.add_argument("-p", type=int, default='5000', metavar="port", help="AI-dec
 parser.add_argument('--save_images', help='save images on your pc', action='store_true')
 parser.add_argument('--save_images_path', help='folder where images are saved', default='/home/llamberti/work/dataset_save_folder/')
 args = parser.parse_args()
-
 
 SAVE_IMAGES = args.save_images
 images_folder_path = args.save_images_path
