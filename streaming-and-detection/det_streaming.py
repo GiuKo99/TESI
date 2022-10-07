@@ -10,14 +10,12 @@ import threading
 import time
 import socket,os,struct
 
-
 #save image and visualize
 import numpy as np
 import cv2 
 import binascii
 import io 
 from PIL import Image
-
 
 # import some common detectron2 utilities
 from detectron2 import model_zoo
@@ -27,7 +25,6 @@ from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog, DatasetCatalog
 #from detectron2.utils.analysis import parameter_count, parameter_count_table
 #from detectron2.modeling.meta_arch.build import build_model
-
 
 VERBOSE=False
 RECEIVE_TIMESTAMP=False #only used for the dataset framework collector
