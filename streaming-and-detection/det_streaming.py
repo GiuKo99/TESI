@@ -13,7 +13,7 @@ import socket,os,struct
 #save image and visualize
 import numpy as np
 import cv2 
-import binascii
+import binascii 
 import io 
 from PIL import Image
 
